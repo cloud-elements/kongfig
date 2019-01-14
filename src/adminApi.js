@@ -1,3 +1,4 @@
+import Promise from 'bluebird';
 import createRouter from './router';
 import requester from './requester';
 import { parseVersion } from './utils.js'
@@ -6,17 +7,18 @@ let pluginSchemasCache;
 let kongVersionCache;
 let resultsCache = {};
 
-export default ({host, https, ignoreConsumers, cache}) => {
+export default ({host, https, ignoreConsumers, cache, concurrency}) => {
     const router = createRouter(host, https);
 
     return createApi({
         router,
         ignoreConsumers,
         getPaginatedJson: cache ? getPaginatedJsonCache : getPaginatedJson,
+        concurrency,
     });
 }
 
-function createApi({ router, getPaginatedJson, ignoreConsumers }) {
+function createApi({ router, getPaginatedJson, ignoreConsumers, concurrency }) {
     return {
         router,
         fetchApis: () => getPaginatedJson(router({name: 'apis'})),
@@ -37,7 +39,7 @@ function createApi({ router, getPaginatedJson, ignoreConsumers }) {
             }
 
             return getPaginatedJson(router({name: 'plugins-enabled'}))
-                .then(json => Promise.all(getEnabledPluginNames(json.enabled_plugins).map(plugin => getPluginScheme(plugin, plugin => router({name: 'plugins-scheme', params: {plugin}})))))
+                .then(json => Promise.map(getEnabledPluginNames(json.enabled_plugins), plugin => getPluginScheme(plugin, plugin => router({name: 'plugins-scheme', params: {plugin}})), {concurrency}))
                 .then(all => pluginSchemasCache = new Map(all));
         },
         fetchKongVersion: () => {
@@ -52,7 +54,8 @@ function createApi({ router, getPaginatedJson, ignoreConsumers }) {
         requestEndpoint: (endpoint, params) => {
             resultsCache = {};
             return requester.request(router(endpoint), prepareOptions(params));
-        }
+        },
+        concurrency
     };
 }
 
