@@ -27,6 +27,7 @@ export const testAdminApi = adminApi({
     host: process.env.TEST_INTEGRATION_KONG_HOST,
     https: false,
     ignoreConsumers: false,
+    ignoreUndeclaredConsumers: false,
     cache: false,
     concurrency: 8,
 });

@@ -7,30 +7,45 @@ let pluginSchemasCache;
 let kongVersionCache;
 let resultsCache = {};
 
-export default ({host, https, ignoreConsumers, cache, concurrency}) => {
+export default ({host, https, ignoreConsumers, ignoreUndeclaredConsumers, consumers, cache, concurrency}) => {
     const router = createRouter(host, https);
 
     return createApi({
         router,
         ignoreConsumers,
+        ignoreUndeclaredConsumers,
+        consumers,
+        getJson: cache ? getJsonCache : getJson,
         getPaginatedJson: cache ? getPaginatedJsonCache : getPaginatedJson,
         concurrency,
     });
 }
 
-function createApi({ router, getPaginatedJson, ignoreConsumers, concurrency }) {
+function createApi({ router, getJson, getPaginatedJson, ignoreConsumers, ignoreUndeclaredConsumers, consumers, concurrency }) {
     return {
         router,
         fetchApis: () => getPaginatedJson(router({name: 'apis'})),
         fetchGlobalPlugins: () => getPaginatedJson(router({name: 'plugins'})),
         fetchPlugins: apiId => getPaginatedJson(router({name: 'api-plugins', params: {apiId}})),
-        fetchConsumers: () => ignoreConsumers ? Promise.resolve([]) : getPaginatedJson(router({name: 'consumers'})),
         fetchConsumerCredentials: (consumerId, plugin) => getPaginatedJson(router({name: 'consumer-credentials', params: {consumerId, plugin}})),
         fetchConsumerAcls: (consumerId) => getPaginatedJson(router({name: 'consumer-acls', params: {consumerId}})),
         fetchUpstreams: () => getPaginatedJson(router({name: 'upstreams'})),
         fetchTargets: (upstreamId) => getPaginatedJson(router({name: 'upstream-targets', params: {upstreamId}})),
         fetchTargetsV11Active: (upstreamId) => getPaginatedJson(router({name: 'upstream-targets-active', params: {upstreamId}})),
         fetchCertificates: () => getPaginatedJson(router({name: 'certificates'})),
+
+        fetchConsumers: () => {
+            if (ignoreConsumers) {
+                // ignore all consumers
+                return Promise.resolve([]);
+            } else if (ignoreUndeclaredConsumers && consumers) {
+                // ignore consumers not included in config
+                return Promise.map(consumers, consumer => getJson(router({name: 'consumer', params: {consumerId: consumer.username}})), {concurrency});
+            } else {
+                // fetch all consumers
+                return getPaginatedJson(router({name: 'consumers'}))
+            }
+        },
 
         // this is very chatty call and doesn't change so its cached
         fetchPluginSchemas: () => {
@@ -81,6 +96,32 @@ function getPaginatedJsonCache(uri) {
 function getPluginScheme(plugin, schemaRoute) {
     return getPaginatedJson(schemaRoute(plugin))
         .then(({fields}) => [plugin, fields]);
+}
+
+function getJsonCache(uri) {
+    if (resultsCache.hasOwnProperty(uri)) {
+        return resultsCache[uri];
+    }
+
+    let result = getJson(uri);
+    resultsCache[uri] = result;
+
+    return result;
+}
+
+function getJson(uri) {
+    return requester.get(uri)
+    .then(response => {
+      if (!response.ok) {
+          const error = new Error(`${uri}: ${response.status} ${response.statusText}`);
+          error.response = response;
+
+          throw error;
+      }
+
+      return response;
+    })
+    .then(r => r.json());
 }
 
 function getPaginatedJson(uri) {
