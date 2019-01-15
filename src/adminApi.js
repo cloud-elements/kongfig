@@ -38,12 +38,17 @@ function createApi({ router, getJson, getPaginatedJson, ignoreConsumers, ignoreU
             if (ignoreConsumers) {
                 // ignore all consumers
                 return Promise.resolve([]);
-            } else if (ignoreUndeclaredConsumers && consumers) {
-                // ignore consumers not included in config
-                return Promise.map(consumers, consumer => getJson(router({name: 'consumer', params: {consumerId: consumer.username}})), {concurrency});
             } else {
                 // fetch all consumers
                 return getPaginatedJson(router({name: 'consumers'}))
+                    .then(all => {
+                        if (ignoreUndeclaredConsumers && consumers) {
+                            const declaredConsumers = {};
+                            consumers.map(c => declaredConsumers[c.username] = true);
+                            return all.filter(c => declaredConsumers[c.username]);
+                        }
+                        return all;
+                    })
             }
         },
 
