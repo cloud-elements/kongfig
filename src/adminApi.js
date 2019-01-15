@@ -43,8 +43,10 @@ function createApi({ router, getJson, getPaginatedJson, ignoreConsumers, ignoreU
                 return getPaginatedJson(router({name: 'consumers'}))
                     .then(all => {
                         if (ignoreUndeclaredConsumers && consumers) {
-                            const declaredConsumers = {};
+                            // declare anonymous by default
+                            const declaredConsumers = {anonymous: true};
                             consumers.map(c => declaredConsumers[c.username] = true);
+                            // filter consumers to declared only
                             return all.filter(c => declaredConsumers[c.username]);
                         }
                         return all;
