@@ -15,13 +15,12 @@ export default ({host, https, ignoreConsumers, ignoreUndeclaredConsumers, consum
         ignoreConsumers,
         ignoreUndeclaredConsumers,
         consumers,
-        getJson: cache ? getJsonCache : getJson,
         getPaginatedJson: cache ? getPaginatedJsonCache : getPaginatedJson,
         concurrency,
     });
 }
 
-function createApi({ router, getJson, getPaginatedJson, ignoreConsumers, ignoreUndeclaredConsumers, consumers, concurrency }) {
+function createApi({ router, getPaginatedJson, ignoreConsumers, ignoreUndeclaredConsumers, consumers, concurrency }) {
     return {
         router,
         fetchApis: () => getPaginatedJson(router({name: 'apis'})),
@@ -103,32 +102,6 @@ function getPaginatedJsonCache(uri) {
 function getPluginScheme(plugin, schemaRoute) {
     return getPaginatedJson(schemaRoute(plugin))
         .then(({fields}) => [plugin, fields]);
-}
-
-function getJsonCache(uri) {
-    if (resultsCache.hasOwnProperty(uri)) {
-        return resultsCache[uri];
-    }
-
-    let result = getJson(uri);
-    resultsCache[uri] = result;
-
-    return result;
-}
-
-function getJson(uri) {
-    return requester.get(uri)
-    .then(response => {
-      if (!response.ok) {
-          const error = new Error(`${uri}: ${response.status} ${response.statusText}`);
-          error.response = response;
-
-          throw error;
-      }
-
-      return response;
-    })
-    .then(r => r.json());
 }
 
 function getPaginatedJson(uri) {
